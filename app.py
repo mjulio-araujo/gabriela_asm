@@ -85,7 +85,8 @@ if st.button("Processar Notas e Enviar para Planilha"):
                 resposta_bruta = processar_texto_llm(texto)
                 if resposta_bruta:
                     try:
-                        dados_dict = json.loads(resposta_bruta)
+                        resposta_limpa = resposta_bruta.replace("```json", "").replace("```", "").strip()
+                        dados_dict = json.loads(resposta_limpa)
                         dados_validados = NotaFiscalSchema(**dados_dict).model_dump()
                         linha = [
                             dados_validados['numero_nota'],
