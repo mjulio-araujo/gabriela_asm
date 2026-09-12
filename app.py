@@ -111,7 +111,11 @@ if st.button("Processar Notas e Enviar para Planilha"):
             try:
                 status_texto.text("Inicializando comunicação com Google Sheets...")
                 aba.append_rows(linhas_para_inserir, value_input_option='USER_ENTERED')
-                st.success(f"Operação concluída. {len(linhas_para_inserir)} registros inseridos remotamente.")
+                
+                url_planilha = f"https://docs.google.com/spreadsheets/d/{PLANILHA_ID}/edit"
+                st.success(f"**Operação concluída.** {len(linhas_para_inserir)} registros inseridos remotamente.")
+                st.markdown(f"[🔗 Clique aqui para visualizar a planilha atualizada no Google Sheets]({url_planilha})")
+                
                 status_texto.empty()
             except Exception as e:
                 st.error(f"Falha na gravação I/O da planilha: {e}")
