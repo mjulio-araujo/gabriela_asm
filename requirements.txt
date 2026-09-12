@@ -1,0 +1,6 @@
+streamlit==1.32.0
+pymupdf==1.23.26
+pandas==2.2.1
+openai==1.14.0
+pydantic==2.6.3
+gspread==6.0.0
