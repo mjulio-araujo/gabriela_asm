@@ -57,7 +57,7 @@ def processar_bloco_llm(bloco_texto):
     - Se o documento não possuir um campo específico (ex: codigo_servico em um Holerite), preencha com "N/D".
     - cnpj_prestador e razao_social_prestador devem conter os dados de quem recebeu o valor (fornecedor, funcionário, concessionária).
     - Localize os dados de pagamento (data_pagamento, banco_pagamento, autenticacao_pagamento) na seção de comprovante bancário, recibo PIX ou transferência.
-    Não adicione formatação markdown (```json).
+    Não adicione formatação markdown.
     """
     prompt_completo = f"{instrucao}\n\nTEXTO DO DOCUMENTO:\n{bloco_texto}"
     
@@ -65,8 +65,7 @@ def processar_bloco_llm(bloco_texto):
         response = client.chat.completions.create(
             model="gpt-5.6-luna",
             messages=[{"role": "user", "content": prompt_completo}],
-            response_format={"type": "json_object"},
-            temperature=0.0
+            response_format={"type": "json_object"}
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -88,7 +87,6 @@ if st.button("Processar Documentos e Enviar para Planilha"):
         for idx_arquivo, arquivo in enumerate(arquivos_pdf):
             texto_completo = extrair_texto_pdf(arquivo.read())
             
-            # Estratégia de Roteamento Dinâmico: Verifica se é um arquivo consolidado (Relatório) ou NF individual
             if "Lançamento 0" in texto_completo:
                 blocos = re.split(r'(?=\bLançamento \d{5}\b)', texto_completo)
                 blocos_validos = [b for b in blocos if len(b.strip()) > 100]
@@ -135,7 +133,7 @@ if st.button("Processar Documentos e Enviar para Planilha"):
                 status_texto.text("Inicializando I/O com Google Sheets...")
                 aba.append_rows(linhas_para_inserir, value_input_option='USER_ENTERED')
                 
-                url_planilha = f"[https://docs.google.com/spreadsheets/d/](https://docs.google.com/spreadsheets/d/){PLANILHA_ID}/edit"
+                url_planilha = f"https://docs.google.com/spreadsheets/d/{PLANILHA_ID}/edit"
                 st.success(f"**Operação concluída.** {len(linhas_para_inserir)} registros inseridos remotamente.")
                 st.markdown(f"[🔗 Clique aqui para visualizar a planilha no Google Sheets]({url_planilha})")
                 
