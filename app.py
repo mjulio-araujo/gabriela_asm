@@ -11,19 +11,19 @@ st.set_page_config(page_title="Extrator Híbrido NFS-e e Prestação de Contas",
 st.title("Extração Semântica e Financeira")
 
 class TransacaoSchema(BaseModel):
-    numero_nota: str = Field(description="Número da Nota Fiscal, Fatura, Recibo ou Holerite")
-    data_emissao: str = Field(description="Data de emissão do documento principal")
-    cnpj_prestador: str = Field(description="CNPJ ou CPF do Prestador, Fornecedor ou Funcionário")
-    razao_social_prestador: str = Field(description="Nome ou Razão Social do Prestador, Fornecedor ou Funcionário")
-    cnpj_tomador: str = Field(description="CNPJ do Tomador de Serviços")
-    razao_social_tomador: str = Field(description="Nome ou Razão Social do Tomador")
-    municipio_tomador: str = Field(description="Município do Tomador")
-    descricao_servico: str = Field(description="Descrição do serviço, produto, rubrica ou despesa")
-    valor_total: float = Field(description="Valor Total do documento em formato decimal")
-    codigo_servico: str = Field(description="Código do Serviço prestado (se houver)")
-    data_pagamento: str = Field(description="Data registrada no comprovante de pagamento/transferência")
-    banco_pagamento: str = Field(description="Instituição financeira onde o pagamento foi processado")
-    autenticacao_pagamento: str = Field(description="Código de autenticação bancária ou ID da transação")
+    numero_nota: str = Field(default="N/D", description="Número da Nota Fiscal, Fatura, Recibo ou Holerite")
+    data_emissao: str = Field(default="N/D", description="Data de emissão do documento principal")
+    cnpj_prestador: str = Field(default="N/D", description="CNPJ ou CPF do Prestador, Fornecedor ou Funcionário")
+    razao_social_prestador: str = Field(default="N/D", description="Nome ou Razão Social do Prestador, Fornecedor ou Funcionário")
+    cnpj_tomador: str = Field(default="N/D", description="CNPJ do Tomador de Serviços")
+    razao_social_tomador: str = Field(default="N/D", description="Nome ou Razão Social do Tomador")
+    municipio_tomador: str = Field(default="N/D", description="Município do Tomador")
+    descricao_servico: str = Field(default="N/D", description="Descrição do serviço, produto, rubrica ou despesa")
+    valor_total: float = Field(default=0.0, description="Valor Total do documento em formato decimal")
+    codigo_servico: str = Field(default="N/D", description="Código do Serviço prestado (se houver)")
+    data_pagamento: str = Field(default="N/D", description="Data registrada no comprovante de pagamento/transferência")
+    banco_pagamento: str = Field(default="N/D", description="Instituição financeira onde o pagamento foi processado")
+    autenticacao_pagamento: str = Field(default="N/D", description="Código de autenticação bancária ou ID da transação")
 
 try:
     API_KEY = st.secrets["OPENAI_API_KEY"]
@@ -51,12 +51,14 @@ def extrair_texto_pdf(arquivo_bytes):
 
 def processar_bloco_llm(bloco_texto):
     instrucao = """
-    Extraia os dados financeiros e de pagamento do bloco de texto fornecido. O bloco contém o documento de cobrança (NF, Fatura, Holerite) e seu respectivo comprovante bancário.
-    Retorne EXCLUSIVAMENTE um objeto JSON válido.
+    Extraia os dados financeiros do bloco de texto fornecido.
+    Retorne EXCLUSIVAMENTE um objeto JSON contendo EXATAMENTE as seguintes chaves:
+    "numero_nota", "data_emissao", "cnpj_prestador", "razao_social_prestador", "cnpj_tomador", "razao_social_tomador", "municipio_tomador", "descricao_servico", "valor_total", "codigo_servico", "data_pagamento", "banco_pagamento", "autenticacao_pagamento".
     Regras de mapeamento:
-    - Se o documento não possuir um campo específico (ex: codigo_servico em um Holerite), preencha com "N/D".
-    - cnpj_prestador e razao_social_prestador devem conter os dados de quem recebeu o valor (fornecedor, funcionário, concessionária).
-    - Localize os dados de pagamento (data_pagamento, banco_pagamento, autenticacao_pagamento) na seção de comprovante bancário, recibo PIX ou transferência.
+    - Se o documento não possuir um campo específico, preencha com a string "N/D".
+    - A chave "valor_total" deve ser estritamente numérica (float). Se não houver valor, retorne 0.0. Não use a string "N/D" neste campo.
+    - cnpj_prestador e razao_social_prestador devem conter os dados de quem recebeu o valor.
+    - Localize os dados de pagamento na seção de comprovante bancário ou transferência.
     Não adicione formatação markdown.
     """
     prompt_completo = f"{instrucao}\n\nTEXTO DO DOCUMENTO:\n{bloco_texto}"
@@ -72,7 +74,7 @@ def processar_bloco_llm(bloco_texto):
         st.error(f"Falha na API da OpenAI: {e}")
         return None
 
-arquivos_pdf = st.file_uploader("Selecione os arquivos PDF (NF-e individual ou Prestação de Contas em lote)", type=["pdf"], accept_multiple_files=True)
+arquivos_pdf = st.file_uploader("Selecione os arquivos PDF", type=["pdf"], accept_multiple_files=True)
 
 if st.button("Processar Documentos e Enviar para Planilha"):
     if not arquivos_pdf:
@@ -89,14 +91,15 @@ if st.button("Processar Documentos e Enviar para Planilha"):
             
             if "Lançamento 0" in texto_completo:
                 blocos = re.split(r'(?=\bLançamento \d{5}\b)', texto_completo)
-                blocos_validos = [b for b in blocos if len(b.strip()) > 100]
+                # Filtra a folha de rosto e fatias inválidas. Apenas blocos que começam com o termo Lançamento são processados.
+                blocos_validos = [b for b in blocos if re.search(r'^\s*Lançamento \d{5}', b)]
             else:
                 blocos_validos = [texto_completo]
             
             total_blocos = len(blocos_validos)
             
             for i, bloco in enumerate(blocos_validos, 1):
-                status_texto.text(f"Processando arquivo {idx_arquivo + 1}/{total_arquivos} | Bloco {i}/{total_blocos}")
+                status_texto.text(f"Processando arquivo {idx_arquivo + 1}/{total_arquivos} | Lançamento {i}/{total_blocos}")
                 
                 if bloco.strip():
                     resposta_bruta = processar_bloco_llm(bloco)
@@ -107,24 +110,24 @@ if st.button("Processar Documentos e Enviar para Planilha"):
                             dados_validados = TransacaoSchema(**dados_dict).model_dump()
                             
                             linha = [
-                                dados_validados['numero_nota'],
-                                dados_validados['data_emissao'],
-                                dados_validados['cnpj_prestador'],
-                                dados_validados['razao_social_prestador'],
-                                dados_validados['cnpj_tomador'],
-                                dados_validados['razao_social_tomador'],
-                                dados_validados['municipio_tomador'],
-                                dados_validados['descricao_servico'],
-                                dados_validados['valor_total'],
-                                dados_validados['codigo_servico'],
-                                dados_validados['data_pagamento'],
-                                dados_validados['banco_pagamento'],
-                                dados_validados['autenticacao_pagamento'],
+                                dados_validados.get('numero_nota', 'N/D'),
+                                dados_validados.get('data_emissao', 'N/D'),
+                                dados_validados.get('cnpj_prestador', 'N/D'),
+                                dados_validados.get('razao_social_prestador', 'N/D'),
+                                dados_validados.get('cnpj_tomador', 'N/D'),
+                                dados_validados.get('razao_social_tomador', 'N/D'),
+                                dados_validados.get('municipio_tomador', 'N/D'),
+                                dados_validados.get('descricao_servico', 'N/D'),
+                                dados_validados.get('valor_total', 0.0),
+                                dados_validados.get('codigo_servico', 'N/D'),
+                                dados_validados.get('data_pagamento', 'N/D'),
+                                dados_validados.get('banco_pagamento', 'N/D'),
+                                dados_validados.get('autenticacao_pagamento', 'N/D'),
                                 arquivo.name 
                             ]
                             linhas_para_inserir.append(linha)
                         except Exception as e:
-                            st.error(f"Erro de parser/validação Pydantic. Bloco {i} do arquivo {arquivo.name}: {e}")
+                            st.error(f"Erro de parser Pydantic no Lançamento {i} do arquivo {arquivo.name}: {e}")
             
             barra_progresso.progress((idx_arquivo + 1) / total_arquivos)
 
